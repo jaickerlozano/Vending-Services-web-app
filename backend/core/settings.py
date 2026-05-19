@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 
     'locations',
     'machines',
+    'products',
 ]
 
 MIDDLEWARE = [
