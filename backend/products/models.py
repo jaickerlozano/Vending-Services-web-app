@@ -1,4 +1,5 @@
 from django.db import models
+from decimal import Decimal
 
 # Create your models here.
 class Product(models.Model):
@@ -29,3 +30,15 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def margin(self):
+        """Margen en dinero"""
+        return self.price - self.cost
+
+    @property
+    def margin_percentage(self):
+        """Porcentaje de margen"""
+        if self.price == 0:
+            return 0
+        return (self.margin / self.price) * 100
