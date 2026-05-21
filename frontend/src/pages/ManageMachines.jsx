@@ -25,19 +25,6 @@ export default function ManageMachines() {
     // loadDataFromAPI ENDPOINTS.products, setProducts);
   }, []);
 
-  // const handleAdd = (e) => {
-  //   e.preventDefault();
-  //   if (!machines.name || !machines.locations) return;
-
-  //   db.addMachine({
-  //     ...newMachine,
-  //     plazaId: parseInt(newMachine.plazaId),
-  //     products: [] // Start empty or default? Let's start empty.
-  //   });
-  //   setNewMachine({ name: '', plazaId: '', type: 'coffee' });
-  //   refreshData();
-  // };
-
     const handleAdd = async (e) => {
     e.preventDefault();
 

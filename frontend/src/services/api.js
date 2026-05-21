@@ -1,3 +1,4 @@
+// Función para poder reutilizar en todas las peticiones de obtención de datos
 export const loadDataFromAPI = async (endpoint, setData) => {
     try {
       const response = await fetch(`http://localhost:8000/api/${endpoint}/`);

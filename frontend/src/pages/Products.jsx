@@ -1,49 +1,117 @@
 import { useState, useEffect } from 'react';
-import { db } from '../services/db';
 import { Edit2, Save, X, Plus, Trash2, Package, Coffee, Cookie } from 'lucide-react';
 import { loadDataFromAPI } from '../services/api';
 import { ENDPOINTS } from '../utils/endpoints';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
-  const [typeMachine, setTypeMachine] = useState('coffee'); // 'coffee' | 'snack'
+  const [typeMachine, setTypeMachine] = useState('coffee');
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
-  
-  // New Product State
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: '', provider: '', cost: '', price: '', productType: '' });
+  const [newProduct, setNewProduct] = useState({ 
+    name: '', 
+    type: '', 
+    type_machine: 'coffee', 
+    supplier: '',
+    cost: '',
+    price: '', 
+  });
+  const [loading, setLoading] = useState(false);
+  const [productTypes, setProductTypes] = useState([]);
+  const [typeMachines, setTypeMachines] = useState([]);
 
   useEffect(() => {
     loadDataFromAPI(ENDPOINTS.products, setProducts);
+    // Cargar opciones desde el backend
+    loadOptions();
   }, []);
 
-  // const refreshProducts = () => {
-  //   loadDataFromAPI(ENDPOINTS.products, setProducts);
-  // };
-  console.log('Products:', products);
-  const handleAdd = (e) => {
-    e.preventDefault();
-    if (!newProduct.name || !newProduct.price) return;
-
-    db.addProduct({
-      name: newProduct.name,
-      provider: newProduct.provider,
-      category: typeMachine, // Auto-assign to current tab category
-      productType: newProduct.productType, // New sub-type
-      cost: parseFloat(newProduct.cost) || 0,
-      price: parseFloat(newProduct.price) || 0
-    });
-
-    setNewProduct({ name: '', provider: '', cost: '', price: '', productType: '' });
-    setShowAddForm(false);
-    refreshProducts();
+  const loadOptions = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/products/options/');
+      if (response.ok) {
+        const data = await response.json();
+        setProductTypes(data.types);
+        setTypeMachines(data.machines);
+      }
+    } catch (error) {
+      console.error('Error cargando opciones:', error);
+    }
   };
 
-  const handleDelete = (id) => {
-    if (confirm('¿Eliminar producto?')) {
-      db.deleteProduct(id);
-      refreshProducts();
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    if (!newProduct.name.trim()) {
+      alert('Por favor ingresa un nombre para el producto');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        name: newProduct.name,
+        type_machine: typeMachine,
+        supplier: newProduct.supplier || '',
+        cost: parseFloat(newProduct.cost) || 0,
+        price: parseFloat(newProduct.price) || 0,
+      };
+      
+      // El tipo se asigna según type_machine (lógica en backend)
+      if (typeMachine === 'snack' && newProduct.type) {
+        payload.type = newProduct.type;
+      } else if (typeMachine === 'coffee') {
+        payload.type = 'cafe';
+      }
+      
+      const response = await fetch(`http://localhost:8000/api/${ENDPOINTS.products}/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setNewProduct({ name: '', type: '', type_machine: typeMachine, supplier: '', cost: '', price: '' });
+        setShowAddForm(false);
+        await loadDataFromAPI(ENDPOINTS.products, setProducts);
+        alert('Producto agregado correctamente');
+      } else {
+        const errorData = await response.json();
+        alert('Error: ' + JSON.stringify(errorData));
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const handleDelete = async (id) => {
+    if (confirm('¿Estás seguro de eliminar este producto?')) {
+      setLoading(true);
+      try {
+        const response = await fetch(`http://localhost:8000/api/${ENDPOINTS.products}/${id}/`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          await loadDataFromAPI(ENDPOINTS.products, setProducts);
+          alert('Producto eliminado correctamente');
+        } else {
+          const errorData = await response.json();
+          alert('Error: ' + JSON.stringify(errorData));
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error de conexión');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -57,24 +125,49 @@ export default function Products() {
     setEditForm({});
   };
 
-  const saveEdit = () => {
-    db.updateProduct(editingId, {
-      name: editForm.name,
-      provider: editForm.provider,
-      category: editForm.category,
-      productType: editForm.productType,
-      cost: parseFloat(editForm.cost),
-      price: parseFloat(editForm.price)
-    });
-    setEditingId(null);
-    refreshProducts();
+  const saveEdit = async () => {
+    setLoading(true);
+    
+    if (!editForm.name.trim()) {
+      alert('El nombre del producto es requerido');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        name: editForm.name,
+        type: editForm.type || 'cafe',
+        type_machine: editForm.type_machine || typeMachine,
+        supplier: editForm.supplier || '',
+        cost: parseFloat(editForm.cost) || 0,
+        price: parseFloat(editForm.price) || 0,
+      };
+
+      const response = await fetch(`http://localhost:8000/api/${ENDPOINTS.products}/${editingId}/`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        setEditingId(null);
+        setEditForm({});
+        await loadDataFromAPI(ENDPOINTS.products, setProducts);
+        alert('Producto actualizado correctamente');
+      } else {
+        const errorData = await response.json();
+        alert('Error: ' + JSON.stringify(errorData));
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error de conexión');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredProducts = products.filter(p => p.type_machine === typeMachine);
-  console.log(typeMachine, 'Products:', filteredProducts, );
-  const PRODUCT_TYPES = [
-    'Bebidas', 'Lácteos', 'Golosinas', 'Snacks', 'Bollería', 'No Comestibles', 'Otros'
-  ];
 
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
@@ -86,6 +179,7 @@ export default function Products() {
         <button 
           className="btn btn-primary"
           onClick={() => setShowAddForm(!showAddForm)}
+          disabled={loading}
         >
           {showAddForm ? <X size={18} /> : <Plus size={18} />}
           {showAddForm ? 'Cancelar' : `Nuevo Producto (${typeMachine === 'coffee' ? 'Café' : 'Snack'})`}
@@ -146,11 +240,11 @@ export default function Products() {
                 <label style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.25rem', display: 'block' }}>Tipo</label>
                 <select
                   className="input"
-                  value={newProduct.productType}
-                  onChange={(e) => setNewProduct({...newProduct, productType: e.target.value})}
+                  value={newProduct.type}
+                  onChange={(e) => setNewProduct({...newProduct, type: e.target.value})}
                 >
                   <option value="">Seleccionar...</option>
-                  {PRODUCT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {productTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
             )}
@@ -160,8 +254,8 @@ export default function Products() {
               <input 
                 className="input" 
                 placeholder="Ej. Nestlé"
-                value={newProduct.provider}
-                onChange={(e) => setNewProduct({...newProduct, provider: e.target.value})}
+                value={newProduct.supplier}
+                onChange={(e) => setNewProduct({...newProduct, supplier: e.target.value})}
               />
             </div>
             <div>
@@ -186,8 +280,8 @@ export default function Products() {
                 required
               />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ height: '42px' }}>
-              Guardar
+            <button type="submit" className="btn btn-primary" style={{ height: '42px' }} disabled={loading}>
+              {loading ? 'Guardando...' : 'Guardar'}
             </button>
           </form>
         </div>
@@ -211,7 +305,6 @@ export default function Products() {
               <tr><td colSpan={typeMachine === 'snack' ? 7 : 6} style={{ padding: '2rem', textAlign: 'center' }}>No hay productos en esta categoría</td></tr>
             ) : filteredProducts.map(product => {
               const isEditing = editingId === product.id;
-              const margin = product.price - product.cost;
 
               return (
                 <tr key={product.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -222,7 +315,7 @@ export default function Products() {
                         <input 
                           className="input" 
                           style={{ marginBottom: '0.25rem' }}
-                          value={editForm.name}
+                          value={editForm.name || ''}
                           onChange={(e) => setEditForm({...editForm, name: e.target.value})}
                         />
                          {/* Optional Category Switcher during Edit uses internal logic, maybe hide here or keep? 
@@ -230,8 +323,8 @@ export default function Products() {
                              If moving to snack, type might correspond. If moving to coffee, type is ignored. */}
                         <select 
                           style={{ fontSize: '0.75rem', padding: '0.25rem' }}
-                          value={editForm.category}
-                          onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                          value={editForm.type_machine || ''}
+                          onChange={(e) => setEditForm({...editForm, type_machine: e.target.value})}
                         >
                           <option value="coffee">Café (Máq)</option>
                           <option value="snack">Snack (Máq)</option>
@@ -251,14 +344,16 @@ export default function Products() {
                       {isEditing ? (
                         <select 
                           className="input" 
-                          value={editForm.productType || ''}
-                          onChange={(e) => setEditForm({...editForm, productType: e.target.value})}
+                          value={editForm.type || ''}
+                          onChange={(e) => setEditForm({...editForm, type: e.target.value})}
                         >
                            <option value="">-</option>
-                           {PRODUCT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                           {productTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                       ) : (
-                        <span className="text-muted">{product.productType || '-'}</span>
+                        <span className="text-muted">
+                          {productTypes.find(t => t.value === product.type)?.label || product.type || '-'}
+                        </span>
                       )}
                     </td>
                   )}
@@ -268,11 +363,11 @@ export default function Products() {
                     {isEditing ? (
                       <input 
                         className="input" 
-                        value={editForm.provider || ''}
-                        onChange={(e) => setEditForm({...editForm, provider: e.target.value})}
+                        value={editForm.supplier || ''}
+                        onChange={(e) => setEditForm({...editForm, supplier: e.target.value})}
                       />
                     ) : (
-                      <span className="text-muted">{product.provider || '-'}</span>
+                      <span className="text-muted">{product.supplier || '-'}</span>
                     )}
                   </td>
                   
@@ -283,7 +378,7 @@ export default function Products() {
                         type="number" step="0.1" 
                         className="input" 
                         style={{ width: '80px', padding: '0.25rem', textAlign: 'right' }}
-                        value={editForm.cost}
+                        value={editForm.cost || ''}
                         onChange={(e) => setEditForm({...editForm, cost: e.target.value})}
                       />
                     ) : (
@@ -298,7 +393,7 @@ export default function Products() {
                         type="number" step="0.1" 
                         className="input" 
                         style={{ width: '80px', padding: '0.25rem', textAlign: 'right' }}
-                        value={editForm.price}
+                        value={editForm.price || ''}
                         onChange={(e) => setEditForm({...editForm, price: e.target.value})}
                       />
                     ) : (
@@ -308,12 +403,12 @@ export default function Products() {
                   
                   {/* Margin */}
                   <td style={{ padding: '1rem', textAlign: 'right' }}>
-                    <div style={{ color: margin > 0 ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>
-                      ${margin.toFixed(2)}
+                    <div style={{ color: product.margin > 0 ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>
+                      ${product.margin?.toFixed(2) || '0.00'}
                     </div>
                     {product.price > 0 && (
                       <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-                        {((margin / product.price) * 100).toFixed(2)}%
+                        {product.margin_percentage?.toFixed(2) || '0.00'}%
                       </div>
                     )}
                   </td>
@@ -322,19 +417,19 @@ export default function Products() {
                   <td style={{ padding: '1rem', textAlign: 'center' }}>
                     {isEditing ? (
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                        <button className="btn btn-primary" style={{ padding: '0.25rem' }} onClick={saveEdit}>
+                        <button className="btn btn-primary" style={{ padding: '0.25rem' }} onClick={saveEdit} disabled={loading}>
                           <Save size={16} />
                         </button>
-                        <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={cancelEdit}>
+                        <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={cancelEdit} disabled={loading}>
                           <X size={16} />
                         </button>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={() => startEdit(product)}>
+                        <button className="btn btn-ghost" style={{ padding: '0.25rem' }} onClick={() => startEdit(product)} disabled={loading}>
                           <Edit2 size={16} />
                         </button>
-                        <button className="btn btn-ghost" style={{ padding: '0.25rem', color: 'var(--color-error)' }} onClick={() => handleDelete(product.id)}>
+                        <button className="btn btn-ghost" style={{ padding: '0.25rem', color: 'var(--color-error)' }} onClick={() => handleDelete(product.id)} disabled={loading}>
                           <Trash2 size={16} />
                         </button>
                       </div>
